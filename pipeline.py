@@ -96,4 +96,11 @@ def run(test_img_fn, task_name):
 
     return pred_coord
 
-print(run(sys.argv[1], sys.argv[2]))
+def generate_samples(coord, std_x=1, std_y=1, num_samples=1000):
+    """Generate samples from a 2D normal distribution centered at a given (x, y), returns list of lists"""
+    x, y = coord
+    sample_1 = np.array([[x,y]])
+    samples_n = (np.random.normal([x, y], [std_x, std_y], (num_samples, 2)))
+    samples = np.concatenate((sample_1, samples_n))
+    return samples
+

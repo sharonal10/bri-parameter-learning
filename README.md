@@ -8,4 +8,5 @@
 
 ## Key functions 
 `pipeline.run`: returns the predicted coordinate, given the filepath of the test image and a task name.
+
 `pipeline.generate_samples`: returns normally distributed samples given a coordinate. Default variance is 1, default number of samples returned is 1000.

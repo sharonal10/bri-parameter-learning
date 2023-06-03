@@ -4,6 +4,7 @@ from copy import deepcopy
 import numpy as np
 from model import *
 import sys
+from sklearn.metrics.pairwise import cosine_similarity
     
 def get_bounding_box(coord, x_size, y_size, width=6, height=6):
     assert (width <= x_size and height <= y_size)
@@ -30,26 +31,25 @@ def get_feature_from_box(image, box):
 
 def find_identical_feature(feature, image):
     height, width, _ = feature.shape
-    min_mse = float('inf')
+    max_similarity = -1
     best_match = None
-    for y in range(image.shape[0] - height):
+    for y in range(image.shape[0]//2, image.shape[0] - height):
         for x in range(image.shape[1] - width):
             candidate = image[y:y+height, x:x+width]
-            mse = ((feature - candidate) ** 2).mean()
-            if mse < min_mse:
-                min_mse = mse
+            similarity = cosine_similarity(feature.reshape(1, -1), candidate.reshape(1, -1))
+            if similarity > max_similarity:
+                max_similarity = similarity
                 best_match = (x, y)
                 
     return best_match
 
-def predict_coordinate(train_img, train_coord, test_img, patch_size=14):
+def predict_coordinate(train_img, train_coord, test_img, patch_size=3):
     concat_img = np.concatenate((train_img, test_img), axis=0)
 
     concat_img = Image.fromarray(concat_img)
-    concat_img = preprocess_rgb(concat_img)
-    model = SAMDinoV2Model('cuda')
+    model = DinoV2Model('cuda')
     
-    pca_features = model.forward(concat_img)[0].detach().cpu().numpy()[0, :, :]
+    pca_features = model.forward(concat_img)
 
     train_coord = (int((train_coord[0]//14)), int((train_coord[1]//14))) 
 
@@ -68,16 +68,16 @@ def predict_coordinate(train_img, train_coord, test_img, patch_size=14):
 
     pred_coord = (match_coord[0] + rel_position[0] + offset_x, match_coord[1] + rel_position[1] + offset_y)
 
-    return pca_features, pred_coord 
+    return pca_features, pred_coord
 
 def run(test_img_fn, task_name):
     task_coords = {
-        'pick_bread': (69, 57),
-        'place_bread': (137, 148),
-        'pick_pot': (291, 130),
-        'pour': (175, 47),
-        'pick_spoon': (121, 166),
-        'place_spoon': (179, 173)
+        'pick_bread': (69, 45),
+        'place_bread': (148, 153),
+        'pick_pot': (295, 154),
+        'pour': (197, 49),
+        'pick_spoon': (74, 178),
+        'place_spoon': (177, 184)
     }
     filepath = rf"train_imgs"
 
@@ -85,14 +85,15 @@ def run(test_img_fn, task_name):
     train_img = train_img.convert('RGB')
     train_img = np.array(train_img)
     train_coord_orig = task_coords[task_name]
-    train_coord = (int((train_coord_orig[0]/0.45)), int((train_coord_orig[1]/0.45))) 
+    resize_ratio=63*14/train_img.shape[1]
+    train_coord = (int((train_coord_orig[0]*resize_ratio)), int((train_coord_orig[1]*resize_ratio))) 
 
     test_img = Image.open(test_img_fn)
     test_img = test_img.convert('RGB')
     test_img = np.array(test_img)
 
-    _, pred_coord = predict_coordinate(train_img, train_coord, test_img)
-    pred_coord = (int((pred_coord[0] * 14 + 7)*0.45), int((pred_coord[1] * 14 + 7)*0.45 - test_img.shape[0]))
+    _, pred_coord = predict_coordinate(train_img, train_coord, test_img, patch_size=3)
+    pred_coord = (int((pred_coord[0] * 14 + 7)/resize_ratio), int((pred_coord[1] * 14 + 7)/resize_ratio - test_img.shape[0]))
 
     return pred_coord
 
